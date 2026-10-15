@@ -239,6 +239,10 @@ public class Menus {
 		addPlugInItem(window, "Tile", "ij.plugin.WindowOrganizer(\"tile\")", 0, false);
 		window.addSeparator();
 
+		Menu save = getMenu("Save");
+		addPlugInItem(save, "Quick Save as PNG", "ij.plugin.QuickPNG(\"direct\")", 0, false);
+		addPlugInItem(save, "Quick Save as PNG with Scaling...", "ij.plugin.QuickPNG(\"scaled\")", 0, false);
+
 		Menu help = getMenu("Help");
 		addPlugInItem(help, "ImageJ Website...", "ij.plugin.BrowserLauncher", 0, false);
 		help.addSeparator();

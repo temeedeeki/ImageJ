@@ -4,6 +4,7 @@ import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
 import java.util.*;
+import java.util.regex.*;
 import ij.*;
 import ij.gui.*;
 import ij.process.*;
@@ -17,6 +18,8 @@ import ij.measure.Calibration;
 public class ImportDialog {
 	private String fileName;
     private String directory;
+	/** Preference controlling the initial Raw import folder checkbox. */
+	public static final String OPEN_ALL_DEFAULT = "raw.openAllDefault";
 	static final String TYPE = "raw.type";
 	static final String WIDTH = "raw.width";
 	static final String HEIGHT = "raw.height";
@@ -72,6 +75,7 @@ public class ImportDialog {
 
 	boolean showDialog() {
 		boolean macro = Macro.getOptions()!=null;
+		openAll = !macro && Prefs.get(OPEN_ALL_DEFAULT, false);
 		if (macro) {
 			width = height = 512;
 			offset = gapBetweenImages = 0;
@@ -80,7 +84,7 @@ public class ImportDialog {
 		}
 		if (choiceSelection>=types.length)
 			choiceSelection = 0;
-		getDimensionsFromName(fileName);
+		getParametersFromName();
 		GenericDialog gd = new GenericDialog("Import>Raw...");
 		gd.addChoice("Image type:", types, types[choiceSelection]);
 		gd.addNumericField("Width:", width, 0, 8, "pixels");
@@ -131,6 +135,7 @@ public class ImportDialog {
 		list = fo.trimFileList(list);
 		list = fo.sortFileList(list);
 		if (list==null) return;
+		ArrayList<String> sourceFiles = new ArrayList<String>();
 		ImageStack stack=null;
 		ImagePlus imp=null;
 		double min = Double.MAX_VALUE;
@@ -164,6 +169,7 @@ public class ImportDialog {
 						String label = list[i];
 						if (slices>1) label += "-" + IJ.pad(n,digits);
 						stack.addSlice(label, ip);
+						sourceFiles.add(new File(directory, list[i]).getAbsolutePath());
 					}
 				} catch(OutOfMemoryError e) {
 					IJ.outOfMemory("OpenAll");
@@ -178,6 +184,7 @@ public class ImportDialog {
 		if (stack!=null) {
 			String title = FolderOpener.trimTitle(directory);
 			imp = new ImagePlus(title, stack);
+			imp.setProperty("QuickPNG.SourceFiles", sourceFiles.toArray(new String[sourceFiles.size()]));
 			if (imp.getBitDepth()==16 || imp.getBitDepth()==32)
 				imp.getProcessor().setMinAndMax(min, max);
                 Calibration cal = imp.getCalibration();
@@ -310,40 +317,64 @@ public class ImportDialog {
 		return lastFileInfo;
 	}
 		
+	/** Folder metadata supplies defaults; explicit filename tokens take precedence. */
+	private void getParametersFromName() {
+		String folder = directory==null?null:new File(directory).getName();
+		getDimensionsFromName(folder);
+		getDimensionsFromName(fileName);
+		if (fileName!=null)
+			guessFormat(directory, fileName);
+		getTypeFromName(folder);
+		getTypeFromName(fileName);
+	}
+
 	private void getDimensionsFromName(String name) {
 		if (name==null)
 			return;
-		if (!name.matches(".*[0-9]+x[0-9]+.*"))
-			return; // must have 'x' seperator
-		int lastUnderscore = name.lastIndexOf("_");
-		String name2 = name;
-		if (lastUnderscore>=0)
-			name2 = name.substring(lastUnderscore);
-		char[] chars = new char[name2.length()];
-		for (int i=0; i<name2.length(); i++)  // change non-digits to spaces
-			chars[i] = Character.isDigit(name2.charAt(i))?name2.charAt(i):' ';
-		name2 = new String(chars);
-		String[] numbers = Tools.split(name2);
-		int n = numbers.length;
-		if (n<2) return;
-		int w = (int)Tools.parseDouble(numbers[0],0);
-		if (w<1) return;
-		int h = (int)Tools.parseDouble(numbers[1],0);
-		if (h<1) return;
-		width = w;
-		height = h;
-		nImages = 1;
-		if (n>2) {
-			int d = (int)Tools.parseDouble(numbers[2],0);
-			if (d>0)
-				nImages = d;
+		Matcher dimensions = Pattern.compile("(?:^|[_-])([0-9]+)x([0-9]+)(?:x([0-9]+))?(?=$|[_.-])").matcher(name);
+		String w = null, h = null, d = null;
+		while (dimensions.find()) {
+			w = dimensions.group(1);
+			h = dimensions.group(2);
+			d = dimensions.group(3);
+		}
+		if (w==null)
+			return;
+		try {
+			int parsedWidth = Integer.parseInt(w);
+			int parsedHeight = Integer.parseInt(h);
+			int parsedDepth = d==null?1:Integer.parseInt(d);
+			if (parsedWidth<1 || parsedHeight<1 || parsedDepth<1)
+				return;
+			width = parsedWidth;
+			height = parsedHeight;
+			nImages = parsedDepth;
+		} catch (NumberFormatException e) {
+			return;
 		}
 		guessFormat(directory, name);
 	}
     
+	/** Explicit type tokens override the estimate based on file size. */
+	private void getTypeFromName(String name) {
+		if (name==null)
+			return;
+		String[] tokens = name.toLowerCase(Locale.US).split("[_\\.-]");
+		for (int i=0; i<tokens.length; i++) {
+			String token = tokens[i];
+			if (token.equals("uint8")) choiceSelection = 0;
+			else if (token.equals("int16")) choiceSelection = 1;
+			else if (token.equals("uint16")) choiceSelection = 2;
+			else if (token.equals("int32")) choiceSelection = 3;
+			else if (token.equals("uint32")) choiceSelection = 4;
+			else if (token.equals("float32")) choiceSelection = 5;
+			else if (token.equals("float64")) choiceSelection = 6;
+		}
+	}
+
 	private void guessFormat(String dir, String name) {
 		if (dir==null) return;
-		File file = new File(dir+name);
+		File file = new File(dir, name);
 		long imageSize = (long)width*height*nImages;
 		long fileSize = file.length();
 		if (fileSize==4*imageSize)
