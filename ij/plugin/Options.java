@@ -124,6 +124,7 @@ public class Options implements PlugIn {
 			gd.addCheckbox("Use_file chooser to import sequences", Prefs.useFileChooser);
 		gd.addCheckbox("Save TIFF and raw in Intel byte order", Prefs.intelByteOrder);
 		gd.addCheckbox("Skip dialog when opening .raw files", Prefs.skipRawDialog);
+		gd.addCheckbox("Open all files in folder by default (Raw import)", Prefs.get(ImportDialog.OPEN_ALL_DEFAULT, false));
 		
 		gd.setInsets(15, 20, 0);
 		gd.addMessage("Results Table Options");
@@ -157,6 +158,7 @@ public class Options implements PlugIn {
 			Prefs.useFileChooser = gd.getNextBoolean();
 		Prefs.intelByteOrder = gd.getNextBoolean();
 		Prefs.skipRawDialog = gd.getNextBoolean();
+		Prefs.set(ImportDialog.OPEN_ALL_DEFAULT, gd.getNextBoolean());
 		Prefs.copyColumnHeaders = gd.getNextBoolean();
 		Prefs.noRowNumbers = !gd.getNextBoolean();
 		Prefs.dontSaveHeaders = !gd.getNextBoolean();

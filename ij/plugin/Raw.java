@@ -35,8 +35,15 @@ public class Raw implements PlugIn {
 		using the format specified by 'fi'. */
 	public static ImagePlus openAll(String directory, FileInfo fi) {
 		ImagePlus imp = openAllVirtual(directory,fi);
-		if (imp!=null)
-			return imp.duplicate();
+		if (imp!=null) {
+			String[] sources = new String[imp.getStackSize()];
+			VirtualStack stack = (VirtualStack)imp.getStack();
+			for (int i=0; i<sources.length; i++)
+				sources[i] = new File(stack.getDirectory(), stack.getFileName(i+1)).getAbsolutePath();
+			ImagePlus copy = imp.duplicate();
+			copy.setProperty("QuickPNG.SourceFiles", sources);
+			return copy;
+		}
 		else
 			return null;
 	}	
